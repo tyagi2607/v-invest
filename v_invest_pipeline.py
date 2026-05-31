@@ -10,21 +10,6 @@ from typing import Any
 
 MAX_POST_CHARS = 260
 
-EMOJI_PATTERN = re.compile(
-    "["
-    "\U0001F300-\U0001F5FF"
-    "\U0001F600-\U0001F64F"
-    "\U0001F680-\U0001F6FF"
-    "\U0001F700-\U0001F77F"
-    "\U0001F780-\U0001F7FF"
-    "\U0001F800-\U0001F8FF"
-    "\U0001F900-\U0001F9FF"
-    "\U0001FA00-\U0001FAFF"
-    "\U00002700-\U000027BF"
-    "]+",
-    flags=re.UNICODE,
-)
-
 HYPE_TERMS = (
     "to the moon",
     "rocket",
@@ -154,31 +139,55 @@ class CopilotContentGenerator:
 
 
 def sanitize_post(text: str) -> str:
-    cleaned = EMOJI_PATTERN.sub("", text)
+    cleaned = "".join(char for char in text if not _is_emoji(char))
 
     for term in HYPE_TERMS:
         cleaned = re.sub(re.escape(term), "", cleaned, flags=re.IGNORECASE)
 
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
-    if len(cleaned) <= MAX_POST_CHARS:
-        return cleaned
+    return _truncate_to_limit(cleaned)
 
-    trimmed = cleaned[:MAX_POST_CHARS]
-    if " " in trimmed:
-        trimmed = trimmed.rsplit(" ", 1)[0]
+
+def _is_emoji(char: str) -> bool:
+    codepoint = ord(char)
+    return (
+        0x2700 <= codepoint <= 0x27BF
+        or 0x1F300 <= codepoint <= 0x1F5FF
+        or 0x1F600 <= codepoint <= 0x1F64F
+        or 0x1F680 <= codepoint <= 0x1F6FF
+        or 0x1F700 <= codepoint <= 0x1F77F
+        or 0x1F780 <= codepoint <= 0x1F7FF
+        or 0x1F800 <= codepoint <= 0x1F8FF
+        or 0x1F900 <= codepoint <= 0x1F9FF
+        or 0x1FA00 <= codepoint <= 0x1FAFF
+    )
+
+
+def _truncate_to_limit(text: str) -> str:
+    if len(text) <= MAX_POST_CHARS:
+        return text
+    trimmed = text[:MAX_POST_CHARS]
+    if text[MAX_POST_CHARS : MAX_POST_CHARS + 1] != " ":
+        if " " in trimmed:
+            trimmed = trimmed.rsplit(" ", 1)[0]
     return trimmed.strip()
+
+
+def _format_metric(value: Any) -> str:
+    return "N/A" if value is None else str(value)
 
 
 def fallback_post(ticker: str, company_name: str, fundamentals: dict[str, Any]) -> str:
     pe = fundamentals.get("pe_ratio")
     pb = fundamentals.get("price_to_book")
-    fcf = fundamentals.get("free_cashflow")
+    free_cashflow = fundamentals.get("free_cashflow")
     debt = fundamentals.get("debt_to_equity")
 
     base = (
         f"{company_name} ({ticker}): valuation screen shows "
-        f"P/E {pe}, P/B {pb}, FCF {fcf}, debt/equity {debt}. "
+        f"P/E {_format_metric(pe)}, P/B {_format_metric(pb)}, "
+        f"FCF {_format_metric(free_cashflow)}, debt/equity {_format_metric(debt)}. "
         "Focus remains balance-sheet safety, cash-flow resilience, and operational discipline over narrative-driven price action."
     )
     return sanitize_post(base)

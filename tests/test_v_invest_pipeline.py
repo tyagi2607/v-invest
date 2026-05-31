@@ -54,11 +54,27 @@ class TickerQueueTests(unittest.TestCase):
 
             self.assertIsNotNone(item)
             self.assertEqual(item.ticker, "BBB.TO")
+            self.assertEqual(item.company_name, "Beta")
             queue.mark_processed("BBB.TO")
 
             with queue_path.open("r", newline="", encoding="utf-8") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(rows[1]["processed"], "true")
+
+    def test_next_unprocessed_returns_none_when_queue_is_done(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            queue_path = Path(tmp) / "tickers.csv"
+            with queue_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(
+                    handle, fieldnames=["ticker", "company_name", "processed"]
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {"ticker": "AAA.V", "company_name": "Alpha", "processed": "true"}
+                )
+
+            queue = TickerQueue(queue_path)
+            self.assertIsNone(queue.next_unprocessed())
 
 
 if __name__ == "__main__":
